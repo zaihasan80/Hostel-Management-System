@@ -1,9 +1,0 @@
-# Build configuration for Vercel
-[build]
-command = "bun run build"
-
-[build.environment]
-NODE_VERSION = "20"
-
-# These are set in the Vercel dashboard (Project Settings → Environment Variables)
-# DATABASE_URL = "postgresql://..."
