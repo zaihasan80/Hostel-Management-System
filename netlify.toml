@@ -1,0 +1,13 @@
+[build]
+command = "npm run build"
+publish = ".next"
+
+[build.environment]
+NODE_VERSION = "20"
+NPM_FLAGS = "--legacy-peer-deps"
+
+# Set DATABASE_URL in Netlify dashboard (Site settings → Environment variables)
+# DATABASE_URL = "postgresql://..."
+
+[[plugins]]
+package = "@netlify/plugin-nextjs"

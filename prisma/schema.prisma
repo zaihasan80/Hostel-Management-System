@@ -1,0 +1,201 @@
+// Hostel Management System (HMS) — Prisma Schema
+// Jabatan Tenaga Manusia (JTM), Malaysia
+// Backend: Supabase PostgreSQL (with snake_case columns)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// AUTHENTICATION & USERS
+// =====================================================
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String   @unique
+  fullName     String   @map("full_name")
+  passwordHash String   @map("password_hash")
+  role         String   @default("Viewer") // Admin | Warden | Facilities | Management | Viewer
+  status       String   @default("Active") // Active | Inactive
+  phone        String?
+  failedLoginAttempts Int @default(0) @map("failed_login_attempts")
+  lockedUntil  DateTime? @map("locked_until")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  blockAssignments UserBlockAssignment[]
+  auditLogs        AuditLog[]
+  sessions         Session[]
+
+  @@map("users")
+}
+
+model UserBlockAssignment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid @map("user_id")
+  blockId   String   @db.Uuid @map("block_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  block Block @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, blockId])
+  @@map("user_block_assignments")
+}
+
+model Session {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// =====================================================
+// HOSTEL CORE ENTITIES (per PRD Section 8)
+// =====================================================
+
+model Block {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blockCode   String   @unique @map("block_code")
+  blockName   String   @map("block_name")
+  totalFloors Int      @map("total_floors")
+  genderType  String   @map("gender_type") // Male | Female | Mixed
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  rooms              Room[]
+  userAssignments    UserBlockAssignment[]
+
+  @@map("blocks")
+}
+
+model Room {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blockId            String    @db.Uuid @map("block_id")
+  roomNumber         String    @map("room_number")
+  floorNumber        Int       @map("floor_number")
+  roomType           String    @map("room_type") // Single | Double | Dormitory
+  capacity           Int
+  status             String    @default("Available") // Available | Occupied | Full | Maintenance
+  lastInspectionDate DateTime? @map("last_inspection_date")
+  notes              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  block       Block           @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  furniture   RoomFurniture[]
+  allocations RoomAllocation[]
+
+  @@unique([blockId, roomNumber])
+  @@index([blockId])
+  @@index([status])
+  @@map("rooms")
+}
+
+model FurnitureCatalog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemName    String   @map("item_name")
+  category    String   // Furniture | Electrical | Sanitary | Appliance
+  defaultIcon String?  @map("default_icon")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roomItems RoomFurniture[]
+
+  @@map("furniture_catalog")
+}
+
+model RoomFurniture {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId          String    @db.Uuid @map("room_id")
+  itemId          String    @db.Uuid @map("item_id")
+  quantity        Int       @default(1)
+  condition       String    @default("Good") // Good | Fair | Damaged | Missing
+  posX            Decimal?  @db.Decimal(5,2) @map("pos_x")
+  posY            Decimal?  @db.Decimal(5,2) @map("pos_y")
+  lastCheckedDate DateTime? @map("last_checked_date")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  room Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  item FurnitureCatalog @relation(fields: [itemId], references: [id])
+
+  @@index([roomId])
+  @@index([condition])
+  @@map("room_furniture")
+}
+
+model Student {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName     String   @map("full_name")
+  icMatricNo   String   @unique @map("ic_matric_no")
+  programme    String
+  gender       String   // Male | Female
+  phoneNo      String?  @map("phone_no")
+  email        String?
+  status       String   @default("Active") // Active | Checked-out | Suspended
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  allocations RoomAllocation[]
+
+  @@map("students")
+}
+
+model RoomAllocation {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId     String    @db.Uuid @map("student_id")
+  roomId        String    @db.Uuid @map("room_id")
+  bedNo         String    @map("bed_no")
+  checkInDate   DateTime  @map("check_in_date")
+  checkOutDate  DateTime? @map("check_out_date")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  room    Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([studentId])
+  @@index([isActive])
+  @@map("room_allocations")
+}
+
+// =====================================================
+// SECURITY — AUDIT LOG
+// =====================================================
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @db.Uuid @map("user_id")
+  action     String
+  entity     String
+  entityId   String?  @map("entity_id")
+  details    String?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  severity   String   @default("info") // info | warning | critical
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_log")
+}
